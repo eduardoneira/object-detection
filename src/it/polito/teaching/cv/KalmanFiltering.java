@@ -8,13 +8,13 @@ import org.opencv.videoio.*;
 
 public class KalmanFiltering {
 	
-	private int stateSize = 6;
-	private int measSize = 4;
-	private int contrSize = 0;
+	private static int stateSize = 6;
+	private static int measSize = 4;
+	private static int contrSize = 0;
 	
 	private static final int type = CvType.CV_32F;
 	
-	public int filter(){
+	public static void main(String[] args){
 		
 		KalmanFilter kf = new KalmanFilter(stateSize,measSize,contrSize,type);
 		
@@ -51,7 +51,7 @@ public class KalmanFiltering {
 		
 		if (!videoCap.open(0)){
 			System.err.println("No se encontro la cámara");
-			return 1;
+			return;
 		}
 		
 		videoCap.set(Videoio.CV_CAP_PROP_FRAME_WIDTH, 1024);
@@ -73,12 +73,28 @@ public class KalmanFiltering {
 			
 			ticks = (double) Core.getTickCount();
 			
+			double dT = (ticks - precTick) / Core.getTickFrequency();
+			
+			Mat frame =  new Mat();
+			
+			videoCap.read(frame);
+			
+			if (!frame.empty()) {
+				if (found) {
+					Mat transitionMatrix = kf.get_transitionMatrix();
+					transitionMatrix.put(0, 2, dT);
+					transitionMatrix.put(1, 3, dT);
+					
+					System.out.println("dT: "+String.valueOf(dT));
+					
+					state = kf.predict();
+				}
+			}
 			
 		}
 		//Seguir
 		
 		
-		return 0;
 	}
 	
 	
