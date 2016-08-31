@@ -2,6 +2,7 @@ package it.polito.teaching.cv;
 
 import org.opencv.core.CvType;
 import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
 import org.opencv.core.*;
 import org.opencv.video.KalmanFilter;
 import org.opencv.videoio.*;
@@ -88,6 +89,24 @@ public class KalmanFiltering {
 					System.out.println("dT: "+String.valueOf(dT));
 					
 					state = kf.predict();
+					
+					System.out.println("State post: ");
+					System.out.println(state.dump());
+					
+					Rect predRect = new Rect();
+					
+					predRect.width = (int) state.get(0, 4)[0];
+					predRect.height = (int) state.get(0, 5)[0];
+					predRect.x = (int) state.get(0, 0)[0]  - predRect.width /2;
+					predRect.y = (int) state.get(0, 1)[0]  - predRect.height /2;
+					
+					Point center = new Point();
+					center.x = (int) state.get(0, 0)[0];
+					center.y = (int) state.get(0, 1)[0];
+					
+					Imgproc.circle(frame, center, 2, new Scalar(255,0,0), -1);
+					//Imgproc.rectangle(frame, predRect, new Scalar(255,0,0), 2);
+					
 				}
 			}
 			
