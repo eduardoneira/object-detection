@@ -8,14 +8,19 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.core.MatOfPoint;
+import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.video.KalmanFilter;
 import org.opencv.videoio.VideoCapture;
+import org.opencv.videoio.Videoio;
 
 import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
@@ -78,7 +83,9 @@ public class ObjRecognitionController
 	
 	// property for object binding
 	private ObjectProperty<String> hsvValuesProp;
-		
+	
+	private KalmanFiltering kalman = new KalmanFiltering();
+	
 	/**
 	 * The action triggered by pushing the button on the GUI
 	 */
@@ -152,6 +159,10 @@ public class ObjRecognitionController
 		}
 	}
 	
+	private Image useKalmanFilter(Mat frame) {
+		return mat2Image(this.kalman.filter(frame));
+	}
+	
 	/**
 	 * Get a frame from the opened video stream (if any)
 	 * 
@@ -161,70 +172,18 @@ public class ObjRecognitionController
 	{
 		// init everything
 		Image imageToShow = null;
-		Mat frame = new Mat();
-		
+		Mat frame =  new Mat();
 		// check if the capture is open
 		if (this.capture.isOpened())
 		{
 			try
 			{
-				// read the current frame
+				//Grab Frame
 				this.capture.read(frame);
 				
-				// if the frame is not empty, process it
-				if (!frame.empty())
-				{
-					// init
-					Mat blurredImage = new Mat();
-					Mat hsvImage = new Mat();
-					Mat mask = new Mat();
-					Mat morphOutput = new Mat();
-					
-					// remove some noise
-					Imgproc.blur(frame, blurredImage, new Size(7, 7));
-					
-					// convert the frame to HSV
-					Imgproc.cvtColor(blurredImage, hsvImage, Imgproc.COLOR_BGR2HSV);
-					
-					// get thresholding values from the UI
-					// remember: H ranges 0-180, S and V range 0-255
-					Scalar minValues = new Scalar(this.hueStart.getValue(), this.saturationStart.getValue(),
-							this.valueStart.getValue());
-					Scalar maxValues = new Scalar(this.hueStop.getValue(), this.saturationStop.getValue(),
-							this.valueStop.getValue());
-					
-					// show the current selected HSV range
-					String valuesToPrint = "Hue range: " + minValues.val[0] + "-" + maxValues.val[0]
-							+ "\tSaturation range: " + minValues.val[1] + "-" + maxValues.val[1] + "\tValue range: "
-							+ minValues.val[2] + "-" + maxValues.val[2];
-					this.onFXThread(this.hsvValuesProp, valuesToPrint);
-					
-					// threshold HSV image to select tennis balls
-					Core.inRange(hsvImage, minValues, maxValues, mask);
-					// show the partial output
-					this.onFXThread(this.maskImage.imageProperty(), this.mat2Image(mask));
-					
-					// morphological operators
-					// dilate with large element, erode with small ones
-					Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(24, 24));
-					Mat erodeElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(12, 12));
-					
-					Imgproc.erode(mask, morphOutput, erodeElement);
-					Imgproc.erode(mask, morphOutput, erodeElement);
-					
-					Imgproc.dilate(mask, morphOutput, dilateElement);
-					Imgproc.dilate(mask, morphOutput, dilateElement);
-					
-					// show the partial output
-					this.onFXThread(this.morphImage.imageProperty(), this.mat2Image(morphOutput));
-					
-					// find the tennis ball(s) contours and show them
-					frame = this.findAndDrawBalls(morphOutput, frame);
-					
-					// convert the Mat object (OpenCV) to Image (JavaFX)
-					imageToShow = mat2Image(frame);
-				}
-				
+				//Process Image
+				imageToShow = this.processImage(frame);
+				//imageToShow = useKalmanFilter(frame);
 			}
 			catch (Exception e)
 			{
@@ -268,6 +227,67 @@ public class ObjRecognitionController
 		}
 		
 		return frame;
+	}
+	
+	
+	
+	private Image processImage(Mat frame){
+		
+		
+		// if the frame is not empty, process it
+		if (!frame.empty())
+		{
+			// init
+			Mat blurredImage = new Mat();
+			Mat hsvImage = new Mat();
+			Mat mask = new Mat();
+			Mat morphOutput = new Mat();
+			
+			// remove some noise
+			Imgproc.blur(frame, blurredImage, new Size(7, 7));
+			
+			// convert the frame to HSV
+			Imgproc.cvtColor(blurredImage, hsvImage, Imgproc.COLOR_BGR2HSV);
+			
+			// get thresholding values from the UI
+			// remember: H ranges 0-180, S and V range 0-255
+			Scalar minValues = new Scalar(this.hueStart.getValue(), this.saturationStart.getValue(),
+					this.valueStart.getValue());
+			Scalar maxValues = new Scalar(this.hueStop.getValue(), this.saturationStop.getValue(),
+					this.valueStop.getValue());
+			
+			// show the current selected HSV range
+			String valuesToPrint = "Hue range: " + minValues.val[0] + "-" + maxValues.val[0]
+					+ "\tSaturation range: " + minValues.val[1] + "-" + maxValues.val[1] + "\tValue range: "
+					+ minValues.val[2] + "-" + maxValues.val[2];
+			this.onFXThread(this.hsvValuesProp, valuesToPrint);
+			
+			// threshold HSV image to select tennis balls
+			Core.inRange(hsvImage, minValues, maxValues, mask);
+			// show the partial output
+			this.onFXThread(this.maskImage.imageProperty(), this.mat2Image(mask));
+			
+			// morphological operators
+			// dilate with large element, erode with small ones
+			Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(24, 24));
+			Mat erodeElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(12, 12));
+			
+			Imgproc.erode(mask, morphOutput, erodeElement);
+			Imgproc.erode(mask, morphOutput, erodeElement);
+			
+			Imgproc.dilate(mask, morphOutput, dilateElement);
+			Imgproc.dilate(mask, morphOutput, dilateElement);
+			
+			// show the partial output
+			this.onFXThread(this.morphImage.imageProperty(), this.mat2Image(morphOutput));
+			
+			// find the tennis ball(s) contours and show them
+			frame = this.findAndDrawBalls(morphOutput, frame);
+			
+			// convert the Mat object (OpenCV) to Image (JavaFX)
+		}
+		
+		return mat2Image(frame);
 	}
 	
 	/**
